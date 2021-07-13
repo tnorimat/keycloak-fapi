@@ -1,4 +1,4 @@
-embed-server --server-config=standalone.xml
+embed-server --server-config=standalone-ha.xml
 /subsystem=keycloak-server/spi=ciba-auth-channel/:add
 /subsystem=keycloak-server/spi=ciba-auth-channel/provider=ciba-http-auth-channel/:add(enabled=true)
 /subsystem=keycloak-server/spi=ciba-auth-channel/:write-attribute(name=default-provider,value=ciba-http-auth-channel)
