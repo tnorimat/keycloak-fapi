@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 )
 
 type Accounts struct {
@@ -22,19 +25,96 @@ type AuthDelegateRequest struct {
 	AcrValues       string `json:"acr_values"`
 }
 
+type AuthenticationResultNotification struct {
+	Status string `json:"status"`
+}
+
 func accountsHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Incoming request from %s.", r.Host)
+	log.Printf("Incoming request from %s, %s.", r.Host, r.RemoteAddr)
 	// TODO : implement authentication entity logic
 
 	// receive json and Authorization header for bearer token for token authentication afterwards
 	var authDelegateRequest AuthDelegateRequest
 	json.NewDecoder(r.Body).Decode(&authDelegateRequest)
-	log.Printf("    acr_values : %s.", authDelegateRequest.AcrValues)
-	log.Printf("    binding_message : %s.", authDelegateRequest.BindingMessage)
-	//log.Printf("    is_consent_required : %s.", authDelegateRequest.ConsentRequired)
-	log.Printf("    login_hint : %s.", authDelegateRequest.LoginHint)
-	log.Printf("    scope : %s.", authDelegateRequest.Scope)
+	log.Printf("    acr_values : %s", authDelegateRequest.AcrValues)
+	log.Printf("    binding_message : %s", authDelegateRequest.BindingMessage)
+	log.Printf("    is_consent_required : %t", authDelegateRequest.ConsentRequired)
+	log.Printf("    login_hint : %s", authDelegateRequest.LoginHint)
+	log.Printf("    scope : %s", authDelegateRequest.Scope)
 
+	bearerToken := r.Header.Get("Authorization")
+	log.Printf("Bearer Token on Authorization Header = %s", bearerToken)
+
+	time.AfterFunc(time.Second*15, func() {
+		log.Printf("Callback : Outgoing request.")
+
+		u := "https://as.keycloak-fapi.org/auth/realms/test/protocol/openid-connect/ext/ciba/auth/callback/"
+		notification := new(AuthenticationResultNotification)
+		notification.Status = "SUCCEED"
+		k, _ := json.Marshal(notification)
+		req, _ := http.NewRequest("POST", u, bytes.NewBuffer(k))
+		req.Header.Set("Authorization", bearerToken)
+		req.Header.Set("Content-Type", "application/json")
+
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+				ServerName:         "as.keycloak-fapi.org",
+			},
+		}
+		client := &http.Client{
+			Transport: tr,
+		}
+		//res, err := client.Post(u, "application/json", bytes.NewBuffer(k))
+		res, err := client.Do(req)
+		log.Printf("Callback : Incoming response.")
+		if err != nil {
+			log.Printf("[!] " + err.Error())
+		} else {
+			log.Printf("[!] " + res.Status)
+		}
+		defer res.Body.Close()
+	})
+
+	w.WriteHeader(http.StatusCreated)
+
+	log.Printf("Outgoing response.")
+
+	/*
+
+		// wait for several seconds in order for keycloak to process authn and authz by AD.
+		time.Sleep(15 * time.Second)
+
+		log.Printf("Callback : Outgoing request.")
+
+		u := "https://as.keycloak-fapi.org/auth/realms/test/protocol/openid-connect/ext/ciba/auth/callback/"
+		notification := new(AuthenticationResultNotification)
+		notification.Status = "SUCCEED"
+		k, _ := json.Marshal(notification)
+		req, _ := http.NewRequest("POST", u, bytes.NewBuffer(k))
+		req.Header.Set("Authorization", bearerToken)
+		req.Header.Set("Content-Type", "application/json")
+
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+				ServerName:         "as.keycloak-fapi.org",
+			},
+		}
+		client := &http.Client{
+			Transport: tr,
+		}
+		//res, err := client.Post(u, "application/json", bytes.NewBuffer(k))
+		res, err := client.Do(req)
+		log.Printf("Callback : Incoming response.")
+		if err != nil {
+			log.Printf("[!] " + err.Error())
+		} else {
+			log.Printf("[!] " + res.Status)
+		}
+		defer res.Body.Close()
+
+	*/
 }
 
 func main() {
