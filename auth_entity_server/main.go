@@ -51,6 +51,7 @@ func accountsHandler(w http.ResponseWriter, r *http.Request) {
 		u := "https://as.keycloak-fapi.org/auth/realms/test/protocol/openid-connect/ext/ciba/auth/callback/"
 		notification := new(AuthenticationResultNotification)
 		notification.Status = "SUCCEED"
+		//notification.Status = "CANCELLED"
 		k, _ := json.Marshal(notification)
 		req, _ := http.NewRequest("POST", u, bytes.NewBuffer(k))
 		req.Header.Set("Authorization", bearerToken)
@@ -65,7 +66,6 @@ func accountsHandler(w http.ResponseWriter, r *http.Request) {
 		client := &http.Client{
 			Transport: tr,
 		}
-		//res, err := client.Post(u, "application/json", bytes.NewBuffer(k))
 		res, err := client.Do(req)
 		log.Printf("Callback : Incoming response.")
 		if err != nil {
