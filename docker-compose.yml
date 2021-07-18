@@ -78,6 +78,7 @@ services:
       context: ./test-runner
     environment:
      - AUTOMATE_TESTS=${AUTOMATE_TESTS}
+     - TEST_PLAN=${TEST_PLAN}
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock
      - ./fapi-conformance-suite-configs:/json-config
