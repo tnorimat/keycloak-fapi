@@ -7,8 +7,9 @@ COPY *.template /usr/local/openresty/nginx/conf/
 COPY *.lua /usr/local/openresty/
 
 COPY entrypoint.sh /usr/local/sbin/
+RUN chmod u+x /usr/local/sbin/entrypoint.sh
 
 EXPOSE 443
 
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["/usr/local/sbin/entrypoint.sh"]
 CMD []

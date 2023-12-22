@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
+	"math/rand"
 	"net/http"
 	"time"
 )
@@ -38,10 +38,22 @@ type Meta struct {
 	Date string `json:"requestDateTime"`
 }
 
+func randomInt(min, max int) int {
+	return min + rand.Intn(max-min)
+}
+
+func randomString(len int) string {
+	bytes := make([]byte, len)
+	for i := 0; i < len; i++ {
+	    bytes[i] = byte(randomInt(65, 90))
+	}
+	return string(bytes)
+}
+
 func consentHandler(w http.ResponseWriter, r *http.Request) {
 	var FapiInteractionId string = r.Header.Get("x-fapi-interaction-id")
 	if FapiInteractionId == "" {
-		FapiInteractionId = uuid.New().String()
+		FapiInteractionId = randomString(16)
 	}
 
 	var now = time.Now()

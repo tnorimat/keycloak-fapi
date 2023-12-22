@@ -169,9 +169,9 @@ services:
       # Need to add client-ca.pem to the image at build-time for cacerts import
 #     - ./common/https/client-ca.pem:/etc/x509/https/client-ca.crt
      - ./common/https/server.pem:/etc/x509/https/server.crt
-#     - ../../bin/keycloak-conformance-test/providers:/opt/keycloak/providers
-#     - ../../bin/keycloak-conformance-test/lib:/opt/keycloak/lib
-#     - ../../bin/keycloak-conformance-test/themes:/opt/keycloak/themes
+     - ./../keycloak-999.0.0-SNAPSHOT/providers:/opt/keycloak/providers
+     - ./../keycloak-999.0.0-SNAPSHOT/lib:/opt/keycloak/lib
+     - ./../keycloak-999.0.0-SNAPSHOT/themes:/opt/keycloak/themes
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/auth/"]
       interval: 10s
