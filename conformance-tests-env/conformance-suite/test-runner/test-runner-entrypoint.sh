@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Bypass proxy for internal docker-compose network communication
+export no_proxy="${no_proxy:+${no_proxy},}server,keycloak,localhost,127.0.0.1"
+
 # Wait for conformance suite server to be ready
 # Check directly within the docker-compose network to avoid routing through host ports
 until curl --output /dev/null --silent --head http://server:8080/ 2>/dev/null
@@ -10,8 +13,8 @@ done
 
 echo "Conformance suite server is available"
 
-# Wait for keycloak test realm to be imported (keycloak-import service sleeps 60s before importing)
-until curl --output /dev/null --silent --fail http://keycloak:8080/auth/realms/test 2>/dev/null
+# Wait for keycloak test realm to be imported
+until curl --output /dev/null --silent --fail http://keycloak:8080/auth/realms/test/.well-known/openid-configuration 2>/dev/null
 do
     echo "Still waiting for keycloak test realm to be available"
     sleep 10

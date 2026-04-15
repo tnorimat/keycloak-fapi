@@ -32,6 +32,6 @@ build/
 ### VS Code ###
 .vscode/
 
-
 ### Project-specific ###
 report/
+conformance-tests-env/common/proxy-ca/proxy-ca.crt

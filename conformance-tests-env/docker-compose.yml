@@ -36,6 +36,8 @@ services:
   api_gateway_nginx:
     build:
       context: ./common/api-gateway-nginx
+      additional_contexts:
+        proxy-ca: ./common/proxy-ca
     volumes:
      - ./common/https/server.pem:/etc/x509/https/tls.crt
      - ./common/https/server-key.pem:/etc/x509/https/tls.key
@@ -70,12 +72,16 @@ services:
   consent_server:
     build:
       context: ./spec/entities/consent-server
+      additional_contexts:
+        proxy-ca: ./common/proxy-ca
 
 # Dpop Proof Signature Verify Server
 
   dpop_proof_signature_verify_server:
     build:
       context: ./spec/entities/dpop-proof-signature-verify-server
+      additional_contexts:
+        proxy-ca: ./common/proxy-ca
 
 #
 # Conformance Suite
@@ -86,6 +92,8 @@ services:
   test_runner:
     build:
       context: ./conformance-suite/test-runner
+      additional_contexts:
+        proxy-ca: ./common/proxy-ca
     environment:
      - AUTOMATE_TESTS=${AUTOMATE_TESTS}
      - TEST_PLAN=${TEST_PLAN}
@@ -123,6 +131,8 @@ services:
   server:
     build:
       context: ./conformance-suite/conformance-suite
+      additional_contexts:
+        proxy-ca: ./common/proxy-ca
       args:
         OPENID_GIT_URL: ${OPENID_GIT_URL}
         OPENID_GIT_TAG: ${OPENID_GIT_TAG}
@@ -159,6 +169,8 @@ services:
   keycloak:
     build:
       context: ./test-target/keycloak/keycloak
+      additional_contexts:
+        proxy-ca: ./common/proxy-ca
       args:
         KEYCLOAK_BASE_IMAGE: ${KEYCLOAK_BASE_IMAGE}
     ports:
@@ -169,6 +181,9 @@ services:
      - KEYCLOAK_ADMIN=${KEYCLOAK_USER}
      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_PASSWORD}
      - KC_SPI_PUBLIC_KEY_STORAGE__INFINISPAN__MIN_TIME_BETWEEN_REQUESTS=1
+     - NO_PROXY=localhost,127.0.0.1,client_jwks_server,resource_server,consent_server,dpop_proof_signature_verify_server,auth_entity_server,api_gateway_nginx,load_balancer,server,nginx,mongodb,keycloak,keycloak-import,test_runner
+     - no_proxy=localhost,127.0.0.1,client_jwks_server,resource_server,consent_server,dpop_proof_signature_verify_server,auth_entity_server,api_gateway_nginx,load_balancer,server,nginx,mongodb,keycloak,keycloak-import,test_runner
+     - JAVA_OPTS_APPEND=-Dhttp.nonProxyHosts=localhost|127.0.0.1|client_jwks_server|resource_server|consent_server|dpop_proof_signature_verify_server|auth_entity_server|api_gateway_nginx|load_balancer|server|nginx|mongodb|keycloak|keycloak-import|test_runner
     volumes:
       # Need to add server.pem to the image at build-time for cacerts import
 #     - ./common/https/server.pem:/etc/x509/https/tls.crt
