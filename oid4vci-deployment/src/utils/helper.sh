@@ -24,7 +24,7 @@ debug()   { printf "\n${BLUE}[DEBUG]${NC} %s\n" "$*"; }
 
 # Return the configured credential names as a JSON array. Credential selection
 # is stored as a comma-separated string so it works with the existing YAML-to-env
-# loader and can be overridden with CREDENTIALS_ENABLED.
+# loader and can be overridden through config.override.yaml.
 enabled_credentials_json() {
     jq -cn --arg enabled "${CREDENTIALS_ENABLED:-}" '
         $enabled
@@ -97,16 +97,6 @@ setup_environment() {
 # -----------------------------------------------------------------------------
 export_yaml_as_env() {
     local yaml_files=("$@")
-    local credentials_enabled_was_set=false
-    local credentials_enabled_override=""
-
-    # Environment variables have higher precedence than YAML configuration.
-    # Remember this value before the YAML passes so credentials.enabled does not
-    # overwrite an explicit CREDENTIALS_ENABLED supplied by the caller.
-    if [[ -v CREDENTIALS_ENABLED ]]; then
-        credentials_enabled_was_set=true
-        credentials_enabled_override="$CREDENTIALS_ENABLED"
-    fi
     
     # Filter to only existing files (defensive check)
     local existing_files=()
@@ -141,9 +131,6 @@ export_yaml_as_env() {
         [[ -z "$key" ]] && continue
         local env_var_name
         env_var_name=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '.' '_')
-        if [[ "$env_var_name" == "CREDENTIALS_ENABLED" && "$credentials_enabled_was_set" == "true" ]]; then
-            value="$credentials_enabled_override"
-        fi
         # Export the raw value
         export "$env_var_name"="$value"
         echo "$env_var_name=$value"
@@ -169,11 +156,7 @@ export_yaml_as_env() {
         env_var_name=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '.' '_')
         # Resolve placeholders using envsubst, now that all variables are in the environment
         local resolved_value
-        if [[ "$env_var_name" == "CREDENTIALS_ENABLED" && "$credentials_enabled_was_set" == "true" ]]; then
-            resolved_value="$credentials_enabled_override"
-        else
-            resolved_value=$(echo "$value" | envsubst)
-        fi
+        resolved_value=$(echo "$value" | envsubst)
         # Re-export the variable with its resolved value
         export "$env_var_name"="$resolved_value"
         case "$key" in
