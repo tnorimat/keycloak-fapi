@@ -14,7 +14,7 @@ Keycloak **26.7.0** keeps OID4VCI experimental but moves pre-authorized code and
    Set `keycloak.enable_rest_credential_offer: true` so `KEYCLOAK_FEATURES` includes `oid4vc-vci-rest-credential-offer`. Without it, the `create-credential-offer` endpoint is disabled on 26.7+.
 
 4. **Select and grant verifiable credentials to the demo user**
-   On 26.7+, issuance requires an explicit per-user VC grant. Set `credentials.enabled` to the credential scopes you want to configure. The `keycloak-ssi config` command grants each selected credential to the demo user automatically.
+   On 26.7+, issuance requires an explicit per-user VC grant. Set `credentials.enabled` to the credential scopes you want to configure. The `keycloak-ssi config` command grants each selected credential to the demo user automatically when the running Keycloak version supports credential grants.
 
 5. **Recreate Keycloak after flag changes**  
    Restart or recreate the Keycloak container so `KC_FEATURES` picks up the new flags.
@@ -26,6 +26,10 @@ keycloak:
   enable_preauth_code: true
   enable_rest_credential_offer: true
   enable_credential_offer_create: true
+
+# Customize enabled credential scopes (defaults match config.yaml)
+credentials:
+  enabled: "IdentityCredential,SteuerberaterCredential,KMACredential"
 ```
 
 ### Verification

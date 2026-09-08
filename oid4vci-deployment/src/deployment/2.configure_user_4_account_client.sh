@@ -16,7 +16,7 @@ init_script
 ensure_keycloak_install_dir_resolved
 
 # -----------------------------------------------------------------------------
-# Get admin token using environment variables for credentials
+# Authenticate admin
 # -----------------------------------------------------------------------------
 log "Obtaining admin token..."
 kcadm config truststore --trustpass "$SSL_TRUST_STORE_PASS" "$(kc_truststore_path)"
@@ -24,14 +24,9 @@ kcadm config credentials --server "$KEYCLOAK_ADMIN_ADDR" --realm master --user "
 success "Admin token obtained."
 
 # -----------------------------------------------------------------------------
-# Read the direct access property of the openid4vc-rest-api client
+# Configure openid4vc-rest-api client
 # -----------------------------------------------------------------------------
-log "Reading direct access property of the openid4vc-rest-api client..."
-kcadm get clients -r "$KEYCLOAK_REALM" -q clientId=openid4vc-rest-api --fields 'id,directAccessGrantsEnabled' || true
-
-# -----------------------------------------------------------------------------
-# Store property ACC_CLIENT_ID in an environment variable
-# -----------------------------------------------------------------------------
+log "Configuring openid4vc-rest-api client..."
 export ACC_CLIENT_ID=$(kcadm get clients -r "$KEYCLOAK_REALM" -q clientId=openid4vc-rest-api --fields id | jq -r '.[0].id')
 log "Stored openid4vc-rest-api Client ID: $ACC_CLIENT_ID"
 
@@ -43,7 +38,7 @@ kcadm update clients/$ACC_CLIENT_ID -r "$KEYCLOAK_REALM" -s directAccessGrantsEn
 success "Direct grant enabled."
 
 # -----------------------------------------------------------------------------
-# Create a user named Francis
+# Create user Francis
 # -----------------------------------------------------------------------------
 log "Creating user Francis if not exists..."
 if ! kcadm get users -r "$KEYCLOAK_REALM" -q username=francis | jq -e '.[0].id' >/dev/null 2>&1; then
@@ -60,31 +55,58 @@ log "Setting password for user Francis..."
 kcadm set-password -r "$KEYCLOAK_REALM" --username "$USERS_FRANCIS_NAME" --new-password "$USERS_FRANCIS_PASSWORD" || true
 success "Password ensured for Francis."
 
-# -----------------------------------------------------------------------------
-# Grant enabled credentials to Francis
-# -----------------------------------------------------------------------------
-# Keycloak requires an explicit per-user grant before a credential can be
-# issued. Keep the demo user synchronized with credentials.enabled so newly
-# enabled samples can be tested immediately after running `keycloak-ssi config`.
-log "Granting enabled credentials to user Francis..."
+# Resolve Francis user ID once for reuse below.
 FRANCIS_USER_ID=$(kcadm get users -r "$KEYCLOAK_REALM" -q username="$USERS_FRANCIS_NAME" --fields id | jq -r '.[0].id // empty')
-[[ -n "$FRANCIS_USER_ID" ]] || error "Could not find user Francis to grant credentials."
+[[ -n "$FRANCIS_USER_ID" ]] || error "Could not find user Francis."
 
-ENABLED_CREDENTIALS=$(enabled_credentials_json)
-GRANTED_CREDENTIALS=$(kcadm get "users/$FRANCIS_USER_ID/vc/credentials" -r "$KEYCLOAK_REALM")
+# -----------------------------------------------------------------------------
+# Grant verifiable credentials (Keycloak 26.7+ only)
+# Query the running server, not config — KEYCLOAK_VERSION (tarball) and
+# KEYCLOAK_IMAGE_TAG (docker) are independent and may diverge.
+# -----------------------------------------------------------------------------
+KC_MAJOR_MINOR=""
+KC_VERSION_RAW=""
 
-jq -r '.[]' <<< "$ENABLED_CREDENTIALS" | while read -r credential; do
-  if jq -e --arg credential "$credential" \
-    'any(.[]; .credentialScopeName == $credential)' <<< "$GRANTED_CREDENTIALS" >/dev/null; then
-    log "Credential '$credential' is already granted to Francis."
-    continue
+KC_VERSION_RAW=$(kcadm get serverinfo 2>/dev/null | jq -r '.systemInfo.version // empty' 2>/dev/null) || KC_VERSION_RAW=""
+
+if [[ "$KC_VERSION_RAW" =~ ^([0-9]+)\.([0-9]+) ]]; then
+  KC_MAJOR_MINOR="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+fi
+
+kc_version_gte() {
+  local required="$1" actual="$2"
+  local r_major r_minor a_major a_minor
+  IFS='.' read -r r_major r_minor <<< "$required"
+  IFS='.' read -r a_major a_minor <<< "$actual"
+  [[ "$a_major" -gt "$r_major" ]] ||
+    { [[ "$a_major" -eq "$r_major" ]] && [[ "$a_minor" -ge "$r_minor" ]]; }
+}
+
+if [[ -n "$KC_MAJOR_MINOR" ]] && kc_version_gte "26.7" "$KC_MAJOR_MINOR"; then
+  log "Keycloak $KC_VERSION_RAW (>= 26.7). Granting enabled credentials to Francis..."
+
+  ENABLED_CREDENTIALS=$(enabled_credentials_json)
+  GRANTED_CREDENTIALS=$(kcadm get "users/$FRANCIS_USER_ID/vc/credentials" -r "$KEYCLOAK_REALM")
+
+  jq -r '.[]' <<< "$ENABLED_CREDENTIALS" | while read -r credential; do
+    if jq -e --arg credential "$credential" \
+      'any(.[]; .credentialScopeName == $credential)' <<< "$GRANTED_CREDENTIALS" >/dev/null; then
+      log "Credential '$credential' is already granted to Francis."
+      continue
+    fi
+
+    jq -n --arg credential "$credential" '{credentialScopeName: $credential}' | \
+      kcadm create "users/$FRANCIS_USER_ID/vc/credentials" -r "$KEYCLOAK_REALM" -f - >/dev/null || \
+      error "Failed to grant credential '$credential' to Francis."
+    success "Credential '$credential' granted to Francis."
+  done
+else
+  if [[ -z "$KC_MAJOR_MINOR" ]]; then
+    warn "Could not determine Keycloak server version; skipping credential grants."
+  else
+    warn "Keycloak $KC_VERSION_RAW < 26.7; skipping credential grants."
   fi
-
-  jq -n --arg credential "$credential" '{credentialScopeName: $credential}' | \
-    kcadm create "users/$FRANCIS_USER_ID/vc/credentials" -r "$KEYCLOAK_REALM" -f - >/dev/null || \
-    error "Failed to grant credential '$credential' to Francis."
-  success "Credential '$credential' granted to Francis."
-done
+fi
 
 # -----------------------------------------------------------------------------
 # Conditionally assign 'credential-offer-create' realm role to Francis
@@ -97,12 +119,11 @@ if [[ "$KEYCLOAK_ENABLE_CREDENTIAL_OFFER_CREATE" == "true" ]]; then
 
   if kcadm get roles/$CREDENTIAL_OFFER_ROLE -r "$KEYCLOAK_REALM" >/dev/null 2>&1; then
     log "Assigning realm role '$CREDENTIAL_OFFER_ROLE' to user Francis..."
-    FRANCIS_USER_ID=$(kcadm get users -r "$KEYCLOAK_REALM" -q username="$USERS_FRANCIS_NAME" --fields id | jq -r '.[0].id')
     if [ -n "$FRANCIS_USER_ID" ] && [ "$FRANCIS_USER_ID" != "null" ]; then
       kcadm add-roles -r "$KEYCLOAK_REALM" \
         --uid "$FRANCIS_USER_ID" \
         --rolename $CREDENTIAL_OFFER_ROLE || \
-        warn "Failed to assign '$CREDENTIAL_OFFER_ROLE' role to user Francis (it may already be assigned)."
+        warn "Failed to assign '$CREDENTIAL_OFFER_ROLE' role (may already be assigned)."
       success "Realm role '$CREDENTIAL_OFFER_ROLE' assigned to Francis."
     else
       error "Could not find user Francis to assign realm role '$CREDENTIAL_OFFER_ROLE'."
@@ -111,11 +132,11 @@ if [[ "$KEYCLOAK_ENABLE_CREDENTIAL_OFFER_CREATE" == "true" ]]; then
     error "Realm role '$CREDENTIAL_OFFER_ROLE' does not exist in realm '$KEYCLOAK_REALM'."
   fi
 else
-  log "Skipping '$CREDENTIAL_OFFER_ROLE' role assignment (disabled in configuration)."
+  log "Skipping '$CREDENTIAL_OFFER_ROLE' role assignment (disabled)."
 fi
 
 # -----------------------------------------------------------------------------
-# Prepare user key proof header if not existent
+# Generate user key proof if needed
 # -----------------------------------------------------------------------------
 if [ ! -f "$PROJECT_TARGET_DIR/user_key_proof_header.json" ]; then
   log "Generating keypair for user..."
