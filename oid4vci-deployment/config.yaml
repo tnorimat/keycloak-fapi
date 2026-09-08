@@ -77,11 +77,6 @@ users:
     name: "francis"
     # Test user password
     password: "francis"
-    # Verifiable credential scopes to grant this user (Keycloak 26.7+ required)
-    credential_scopes:
-      - "IdentityCredential"
-      - "SteuerberaterCredential"
-      - "KMACredential"
     # Francis test keystore
     keystore:
       path: "${PROJECT_TARGET_DIR}/francis_kc_keystore.pkcs12"
@@ -97,6 +92,15 @@ clients:
   secret: "uArydomqOymeF0tBrtipkPYujNNUuDlt"
   # Test client URL
   test_client: "http://localhost:4200"
+
+# -----------------------------------------------------------------------------
+# Credential configuration
+# -----------------------------------------------------------------------------
+credentials:
+  # Comma-separated client-scope names from src/config/client-scope-config.json.
+  # MobileDrivingLicence is intentionally excluded because mDoc support requires
+  # a Keycloak main/nightly build with the experimental oid4vc-mdoc feature.
+  enabled: "IdentityCredential,SteuerberaterCredential,KMACredential"
 
 # -----------------------------------------------------------------------------
 # Endpoints configuration
